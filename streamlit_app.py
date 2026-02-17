@@ -1,29 +1,58 @@
 import streamlit as st
 import pandas as pd
 
-# --- Constants ---
+# Constants
 GRADE_POINTS = {
     "A": 4.0, "A-": 3.7,
     "B+": 3.3, "B": 3.0, "B-": 2.7,
     "C+": 2.3, "C": 2.0, "C-": 1.7,
     "D+": 1.3, "D": 1.0, "F": 0.0,
-    "IP (In Progress)": None, # No GPA impact
-    "Not Taken": None        # No GPA impact
+    "IP (In Progress)": None,
+    "Not Taken": None
 }
 
 DEFAULT_CREDITS = 4
 
-# --- Helper Functions ---
+def apply_custom_styles():
+    st.markdown(
+        """
+        <style>
+        :root {
+            --primary-color: #FFD700;
+        }
+        .main {
+            color: #FFD700;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            color: #FFD700 !important;
+        }
+        .stMetric label {
+            color: #FFD700 !important;
+        }
+        .stMetric [data-testid="stMetricValue"] {
+            color: #FFD700 !important;
+        }
+        div[data-baseweb="select"] > div {
+            border-color: #FFD700 !important;
+        }
+        .stButton>button {
+            background-color: #FFD700 !important;
+            color: black !important;
+        }
+        .stProgress > div > div > div > div {
+            background-color: #FFD700 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 def init_session_state():
-    """Initialize the session state."""
-    # 1. Load Catalog from CSV
     if 'catalog' not in st.session_state:
         csv_path = "course_catalog.csv"
         try:
             df = pd.read_csv(csv_path)
-            # Convert NaN to empty strings or handle missing data
             df = df.fillna("")
-            # Ensure columns exist if loading from old CSV format
             if 'offering_year' not in df.columns:
                 df['offering_year'] = ""
             if 'offering_semester' not in df.columns:
@@ -35,7 +64,6 @@ def init_session_state():
                 
             st.session_state['catalog'] = df.to_dict('records')
         except FileNotFoundError:
-            # Fallback dummy data if CSV doesn't exist
             st.session_state['catalog'] = [
                 {"code": "SOC 410", "name": "Identity: Gender, Race", "credits": 4},
                 {"code": "ECON 251", "name": "Principles of Economics", "credits": 4},
@@ -45,11 +73,8 @@ def init_session_state():
                 {"code": "FYS 102", "name": "First Year Seminar II", "credits": 4},
                 {"code": "ENG 101", "name": "College Writing", "credits": 4},
             ]
-            # Save fallback to CSV for future runs
             pd.DataFrame(st.session_state['catalog']).to_csv(csv_path, index=False)
     
-    # Structure: plan[year][semester] = {course_code: grade, ...}
-    # We'll use a dictionary to store selected courses and their grades for each semester.
     if 'plan' not in st.session_state:
         st.session_state['plan'] = {
             f"Year {y}": {s: {} for s in ["Fall", "Spring", "Summer"]}
@@ -57,17 +82,12 @@ def init_session_state():
         }
 
 def calculate_gpa(course_grades, catalog=None):
-    """
-    Calculate GPA for a dictionary of {course_code: grade}.
-    Returns (gpa, total_credits).
-    """
     if catalog is None:
         catalog = st.session_state.get('catalog', [])
         
     total_points = 0
     total_credits = 0
     
-    # lookup course credits from catalog
     catalog_dict = {c['code']: c['credits'] for c in catalog}
     
     for code, grade in course_grades.items():
@@ -80,21 +100,15 @@ def calculate_gpa(course_grades, catalog=None):
     gpa = total_points / total_credits if total_credits > 0 else 0.0
     return gpa, total_credits
 
-# --- UI Components ---
-
-# --- UI Components ---
-
 def sidebar_section():
-    st.sidebar.header("⚙️ Settings")
+    st.sidebar.header("Settings")
     
-    # 1. Course Catalog Upload
     st.sidebar.subheader("1. Course Catalog")
     uploaded_file = st.sidebar.file_uploader("Upload CSV Catalog", type="csv")
     if uploaded_file is not None:
         try:
             df = pd.read_csv(uploaded_file)
             df = df.fillna("")
-            # Ensure columns exist
             for col in ['offering_year', 'offering_semester', 'major_restriction']:
                 if col not in df.columns:
                     df[col] = ""
@@ -106,11 +120,9 @@ def sidebar_section():
         except Exception as e:
             st.sidebar.error(f"Error loading CSV: {e}")
             
-    # 2. Student Profile
     st.sidebar.divider()
     st.sidebar.subheader("2. Student Profile")
     
-    # Start Year Selection
     if 'profile' not in st.session_state:
         st.session_state['profile'] = {'start_year': 2022, 'major': 'Undeclared'}
         
@@ -122,7 +134,6 @@ def sidebar_section():
         key="start_year_input"
     )
     
-    # Major Selection
     majors = ["Undeclared", "Statistic and Data Science (SDS)", "Politics Philosophy and Economics (PPE)", "Environmental and Sustainability Studies (ESS)"]
     current_major_idx = 0
     if st.session_state['profile']['major'] in majors:
@@ -135,24 +146,20 @@ def sidebar_section():
         key="major_input"
     )
     
-    # Update state
     st.session_state['profile']['start_year'] = start_year
     st.session_state['profile']['major'] = major
 
     st.sidebar.divider()
     
-    # 3. Admin Tools (Collapsible)
-    with st.sidebar.expander("🎓 Admin Tools (Add Course)"):
+    with st.sidebar.expander("Admin Tools (Add Course)"):
         admin_form()
 
 def admin_form():
-    # Helper for adding courses manually
     with st.form("add_course_form"):
         new_code = st.text_input("Course Code", placeholder="e.g. CS 101")
         new_name = st.text_input("Course Name", placeholder="e.g. Intro to CS")
         new_credits = st.number_input("Credits", min_value=1, max_value=10, value=4)
         
-        # New: Semester Availability
         st.write("Offering Availability (Leave empty for 'Always Available')")
         col_avail1, col_avail2 = st.columns(2)
         with col_avail1:
@@ -160,7 +167,6 @@ def admin_form():
         with col_avail2:
             new_semester = st.selectbox("Semester (Optional)", ["", "Fall", "Spring", "Summer"])
             
-        # New: Category and Major Restriction
         st.write("Course Details")
         col_det1, col_det2 = st.columns(2)
         with col_det1:
@@ -172,7 +178,6 @@ def admin_form():
         
         if submitted:
             if new_code and new_name:
-                # Check for duplicates
                 if any(c['code'] == new_code for c in st.session_state['catalog']):
                     st.sidebar.error(f"Course {new_code} already exists!")
                 else:
@@ -185,7 +190,6 @@ def admin_form():
                         "category": new_category,
                         "major_restriction": new_restriction
                     })
-                    # Save to CSV for persistence
                     pd.DataFrame(st.session_state['catalog']).to_csv("course_catalog.csv", index=False)
                     st.sidebar.success(f"Added {new_code}")
             else:
@@ -195,21 +199,18 @@ def admin_form():
     st.sidebar.subheader("Current Catalog")
     df_catalog = pd.DataFrame(st.session_state['catalog'])
     if not df_catalog.empty:
-        # Standardize NaN to empty string for display
         df_catalog = df_catalog.fillna("")
         st.sidebar.dataframe(df_catalog, hide_index=True, use_container_width=True)
 
 def student_view():
-    st.title("📚 Academic Degree Planner")
+    st.title("Academic Degree Planner")
     
-    # Access Profile
     if 'profile' not in st.session_state:
         st.session_state['profile'] = {'start_year': 2022, 'major': 'Undeclared'}
     
     start_year = st.session_state['profile']['start_year']
     student_major = st.session_state['profile']['major']
     
-    # 1. Top Level Metrics (Cumulative)
     all_course_grades = {}
     for year in st.session_state['plan']:
         for sem in st.session_state['plan'][year]:
@@ -223,12 +224,10 @@ def student_view():
     col3.metric("Courses Taken", f"{len(all_course_grades)}")
     col4.metric("Major", student_major)
     
-    # Progress Bar
     progress_val = min(cum_credits / 120, 1.0)
     st.progress(progress_val, text=f"Degree Progress: {cum_credits} / 120 Credits")
 
-    # --- Performance Visualization ---
-    with st.expander("📊 Performance Insights", expanded=False):
+    with st.expander("Performance Insights", expanded=False):
         viz_col1, viz_col2 = st.columns([2, 1])
         
         with viz_col1:
@@ -239,7 +238,7 @@ def student_view():
                     sem_data = st.session_state['plan'][y_key][s_key]
                     if sem_data:
                         gpa, _ = calculate_gpa(sem_data)
-                        trend_data.append({"Term": f"{y_key[5:]} {s_key}", "GPA": gpa}) # y_key[5:] converts "Year 1" to "1"
+                        trend_data.append({"Term": f"{y_key[5:]} {s_key}", "GPA": gpa})
             
             if trend_data:
                 df_trend = pd.DataFrame(trend_data)
@@ -249,12 +248,9 @@ def student_view():
                 
         with viz_col2:
             st.caption("Grade Distribution")
-            # Filter out non-gpa grades
             grades_list = [g for g in all_course_grades.values() if g in GRADE_POINTS and GRADE_POINTS[g] is not None]
             if grades_list:
-                # Count occurrences of each grade
                 grade_counts = pd.Series(grades_list).value_counts()
-                # Sort by the order in GRADE_POINTS
                 sort_order = [k for k in GRADE_POINTS.keys() if k in grade_counts.index]
                 grade_counts = grade_counts.reindex(sort_order)
                 st.bar_chart(grade_counts, height=250)
@@ -263,17 +259,10 @@ def student_view():
 
     st.divider()
     
-    # 2. Year Tabs
     tabs = st.tabs(["Year 1", "Year 2", "Year 3", "Year 4"])
     
-    # Pre-compute catalog map
     catalog_map = {c['code']: c for c in st.session_state['catalog']}
     
-    # --- Auto-Fill Pillar Logic ---
-    # Ensure mandatory courses are in the plan if they exist in catalog
-    # Seminar I (Year 1 Fall), Seminar II (Year 2 Fall), English (Year 1 Any - let's default Fall of Year 1)
-    
-    # Mapping of Core Course Codes (Assuming these codes exist in catalog)
     PILLARS = {
         "FYS 101": ("Year 1", "Fall"),
         "ENG 101": ("Year 1", "Fall"),
@@ -283,8 +272,6 @@ def student_view():
     for code, (pyear, psem) in PILLARS.items():
         if code in catalog_map:
              if code not in st.session_state['plan'][pyear][psem]:
-                 # Only add if not already present anywhere else?
-                 # ideally yes, but for now force default placement
                  st.session_state['plan'][pyear][psem][code] = "IP (In Progress)"
 
     for year_idx, tab in enumerate(tabs):
@@ -297,7 +284,6 @@ def student_view():
             semesters = ["Fall", "Spring", "Summer"]
             
             for i, semester in enumerate(semesters):
-                # Calculate term year
                 if semester == "Fall":
                     term_year = current_academic_year
                 else:
@@ -306,8 +292,6 @@ def student_view():
                 with cols[i]:
                     st.subheader(f"{semester} {term_year}")
                     
-                    # --- Filters ---
-                    # Only show category filter if there are actually courses to filter
                     filter_col1, = st.columns(1)
                     with filter_col1:
                         cat_filter = st.multiselect(
@@ -318,14 +302,11 @@ def student_view():
                             placeholder="Filter by Category..."
                         )
 
-                    # --- Filter Catalog for this Term ---
                     available_courses = []
                     for c in st.session_state['catalog']:
-                        # 1. Year/Semester Filter
                         c_year = c.get('offering_year')
                         c_sem = c.get('offering_semester')
                         
-                        # Clean data
                         if pd.isna(c_year) or c_year == "": c_year = None
                         else: c_year = int(c_year)
                         
@@ -335,18 +316,15 @@ def student_view():
                         if c_year and c_year != term_year: match_term = False
                         if c_sem and c_sem != semester: match_term = False
                         
-                        # 2. Major Restriction Filter
-                        # Logic: Course is available if Restriction is Empty OR Restriction matches Student Major
                         course_restriction = c.get('major_restriction', "")
                         if pd.isna(course_restriction): course_restriction = ""
                         
                         match_major = False
                         if course_restriction == "":
                             match_major = True
-                        elif course_restriction in student_major: # Check if "SDS" is in "Statistic and Data Science (SDS)"
+                        elif course_restriction in student_major:
                             match_major = True
                             
-                        # 3. Category Filter
                         match_cat = True
                         if cat_filter:
                             c_cat = c.get('category', "Uncategorized")
@@ -356,18 +334,14 @@ def student_view():
                         if match_term and match_major and match_cat:
                             available_courses.append(c)
                             
-                    # Create dropdown options
-                    # Sort primarily by code
                     available_courses.sort(key=lambda x: x['code'])
                     
                     catalog_options = [f"{c['code']}: {c['name']}" for c in available_courses]
                     local_catalog_map = {f"{c['code']}: {c['name']}": c['code'] for c in available_courses}
                     local_reverse_map = {c['code']: f"{c['code']}: {c['name']}" for c in available_courses}
 
-                    # Helper to update state
                     current_sem_data = st.session_state['plan'][year_key][semester]
                     
-                    # Multiselect for courses
                     current_selected_formatted = [
                         local_reverse_map.get(code, f"{code} (Unavailable)") 
                         for code in current_sem_data.keys()
@@ -381,21 +355,17 @@ def student_view():
                         label_visibility="collapsed"
                     )
                     
-                    # Sync Selection with State
                     selected_codes = [local_catalog_map[f] for f in selected_formatted]
                     
-                    # Removal logic
                     for code in list(current_sem_data.keys()):
                         if code not in selected_codes:
-                            if code in local_reverse_map: # Only remove if currently visible in *this filtered view*
+                            if code in local_reverse_map:
                                 del st.session_state['plan'][year_key][semester][code]
                             
-                    # Addition logic
                     for code in selected_codes:
                         if code not in current_sem_data:
                             st.session_state['plan'][year_key][semester][code] = "IP (In Progress)"
                     
-                    # Grade Input
                     if current_sem_data:
                         st.caption("Grades")
                         for code in list(current_sem_data.keys()):
@@ -415,14 +385,12 @@ def student_view():
                                 label_visibility="visible" 
                             )
 
-                    # Semester Metrics
                     sem_gpa, sem_credits = calculate_gpa(current_sem_data, st.session_state['catalog']) 
                     st.info(f"GPA: {sem_gpa:.2f} | Credits: {sem_credits}")
 
-
-# --- Main Execution ---
 if __name__ == "__main__":
     st.set_page_config(page_title="Academic Planner", layout="wide")
+    apply_custom_styles() # Apply styles after config
     init_session_state()
     sidebar_section()
     student_view()
